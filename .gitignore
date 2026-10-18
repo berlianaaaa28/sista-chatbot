@@ -1,0 +1,11 @@
+# rahasia dan lingkungan lokal
+.env
+venv/
+.venv/
+__pycache__/
+*.pyc
+
+# File kerja pencatatan. Setiap laptop menulis file ini, jadi JANGAN di-commit.
+# Untuk mengunggah hasil akhir, salin/ganti namanya, misalnya:
+#   results/hasil_gemini_temperature_berliana.csv
+results/hasil_pengujian.csv
