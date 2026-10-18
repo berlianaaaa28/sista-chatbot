@@ -9,6 +9,7 @@ import streamlit as st
 
 import experiment
 import providers
+import ui_eksperimen
 from providers import NAMA_PARAM
 
 st.set_page_config(page_title="SISTA", page_icon="🎓", layout="wide")
@@ -79,7 +80,7 @@ with st.sidebar:
 # ---------------------------------------------------------------------------
 # TAB
 # ---------------------------------------------------------------------------
-(tab_chat,) = st.tabs(["💬 Chat"])
+tab_chat, tab_eksp = st.tabs(["💬 Chat", "🧪 Eksperimen"])
 
 # ---------------------------- TAB CHAT -------------------------------------
 with tab_chat:
@@ -122,3 +123,7 @@ with tab_chat:
                 st.error(baris["status"].replace("ERROR: ", "", 1))
                 # hapus pertanyaan yang gagal agar riwayat tetap rapi
                 st.session_state.pesan.pop()
+
+# -------------------------- TAB EKSPERIMEN ---------------------------------
+with tab_eksp:
+    ui_eksperimen.render(api, info, params, peneliti.strip(), nilai_ai)
