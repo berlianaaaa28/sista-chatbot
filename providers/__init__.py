@@ -87,3 +87,28 @@ def list_models(nama):
     if not key:
         raise ProviderError(f"API key {nama} belum diisi.")
     return _MODUL[nama].list_models(key)
+
+
+# ---------------------------------------------------------------------------
+# PENILAI KUALITAS (LLM-as-a-judge): AI memberi deskripsi singkat kualitas jawaban.
+# Memakai 1 panggilan API tambahan, dengan API dan model yang sama.
+# ---------------------------------------------------------------------------
+PROMPT_PENILAI = """Kamu adalah penilai kualitas jawaban chatbot. Nilai jawaban berdasarkan: relevansi dengan pertanyaan, ketepatan isi, kejelasan bahasa, dan kelengkapan. Jangan menilai berdasarkan panjang jawaban saja.
+
+Tulis HANYA satu deskripsi dalam bahasa Indonesia, maksimal 40 kata, diawali salah satu label: "Baik -", "Cukup -", atau "Kurang -", lalu alasan singkat. Tanpa format lain."""
+
+
+def nilai_kualitas(nama, pertanyaan, jawaban):
+    """Kembalikan deskripsi kualitas jawaban (teks pendek). Tidak pernah melempar error."""
+    try:
+        isi = f"Pertanyaan:\n{pertanyaan}\n\nJawaban chatbot:\n{jawaban}"
+        hasil = chat_detail(
+            nama,
+            [{"role": "user", "content": isi}],
+            {"temperature": 0.2},
+            system_prompt=PROMPT_PENILAI,
+        )
+        teks = " ".join(hasil["teks"].split())
+        return teks[:300]
+    except ProviderError as e:
+        return "(Penilaian AI gagal: " + " ".join(str(e).split())[:120] + ")"
