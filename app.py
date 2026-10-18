@@ -7,6 +7,7 @@ Jalankan dengan:  streamlit run app.py
 
 import streamlit as st
 
+import experiment
 import providers
 from providers import NAMA_PARAM
 
@@ -53,6 +54,23 @@ with st.sidebar:
     if info["note"]:
         st.caption("ℹ️ " + info["note"])
 
+    st.subheader("Pencatatan ke CSV")
+    st.caption("Setiap pertanyaan di Chat otomatis dicatat ke results/hasil_pengujian.csv.")
+    diuji_chat = st.selectbox(
+        "Parameter yang sedang diuji",
+        [""] + list(info["params"].keys()),
+        format_func=lambda x: "(tidak ada)" if x == "" else NAMA_PARAM[x],
+        key=f"diuji_{api}",
+        help="Hanya label di kolom parameter_diuji pada CSV. Ubah slider parameter itu "
+             "antar pertanyaan, dan biarkan parameter lain tetap.",
+    )
+    peneliti = st.text_input("Nama peneliti (opsional)", key="peneliti")
+    nilai_ai = st.checkbox(
+        "Nilai kualitas jawaban dengan AI",
+        value=True,
+        help="Memakai 1 panggilan API tambahan per jawaban (menghabiskan kuota lebih cepat).",
+    )
+
     st.divider()
     if st.button("🗑️ Bersihkan percakapan"):
         st.session_state.pesan = []
@@ -76,6 +94,8 @@ with tab_chat:
     for p in st.session_state.pesan:
         with st.chat_message(p["role"]):
             st.markdown(p["content"])
+            if p.get("info"):
+                st.caption(p["info"])
 
     pertanyaan = st.chat_input("Tulis pertanyaanmu di sini...")
     if pertanyaan:
@@ -85,11 +105,20 @@ with tab_chat:
 
         with st.chat_message("assistant"):
             with st.spinner("SISTA sedang berpikir..."):
-                try:
-                    jawaban = providers.chat(api, st.session_state.pesan, params)
-                    st.markdown(jawaban)
-                    st.session_state.pesan.append({"role": "assistant", "content": jawaban})
-                except providers.ProviderError as e:
-                    st.error(str(e))
-                    # hapus pertanyaan yang gagal agar riwayat tetap rapi
-                    st.session_state.pesan.pop()
+                baris = experiment.tanya(
+                    api, st.session_state.pesan, params,
+                    parameter_diuji=diuji_chat, sumber="chat",
+                    peneliti=peneliti.strip(), nilai_ai=nilai_ai,
+                    catat_gagal=False,
+                )
+            if baris["status"] == "OK":
+                st.markdown(baris["jawaban"])
+                info_teks = experiment.ringkas_baris(baris)
+                st.caption(info_teks)
+                st.session_state.pesan.append(
+                    {"role": "assistant", "content": baris["jawaban"], "info": info_teks}
+                )
+            else:
+                st.error(baris["status"].replace("ERROR: ", "", 1))
+                # hapus pertanyaan yang gagal agar riwayat tetap rapi
+                st.session_state.pesan.pop()
