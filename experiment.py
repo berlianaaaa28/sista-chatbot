@@ -31,6 +31,7 @@ KOLOM = [
     "waktu",
     "sumber",            # chat atau eksperimen
     "peneliti",
+    "nomor_kombinasi",   # nomor dari tabel kombinasi struktur dan teknik prompting (dosen)
     "api",
     "model",
     "parameter_diuji",   # kosong jika tidak ada parameter khusus yang diuji
@@ -70,9 +71,29 @@ def ringkas_baris(baris):
     return teks
 
 
+def _perbarui_header_lama():
+    """
+    Jika CSV lama dibuat sebelum ada kolom baru (misalnya nomor_kombinasi),
+    tulis ulang dengan header terbaru. Data lama tidak hilang; kolom baru dikosongkan.
+    """
+    if not FILE_CSV.exists() or FILE_CSV.stat().st_size == 0:
+        return
+    with open(FILE_CSV, newline="", encoding="utf-8-sig") as f:
+        pembaca = csv.DictReader(f)
+        if pembaca.fieldnames == KOLOM:
+            return
+        isi = list(pembaca)
+    with open(FILE_CSV, "w", newline="", encoding="utf-8-sig") as f:
+        penulis = csv.DictWriter(f, fieldnames=KOLOM, extrasaction="ignore")
+        penulis.writeheader()
+        for baris in isi:
+            penulis.writerow({k: baris.get(k, "") for k in KOLOM})
+
+
 def simpan_baris(baris):
     """Tambahkan satu baris hasil ke CSV (file dibuat otomatis jika belum ada)."""
     FOLDER_HASIL.mkdir(exist_ok=True)
+    _perbarui_header_lama()
     baru = not FILE_CSV.exists() or FILE_CSV.stat().st_size == 0
     # utf-8-sig supaya huruf Indonesia tampil benar saat dibuka di Excel
     with open(FILE_CSV, "a", newline="", encoding="utf-8-sig") as f:
@@ -90,21 +111,26 @@ def baca_csv():
 
 
 def tanya(api, riwayat, params, parameter_diuji="", sumber="chat", peneliti="",
-          nilai_ai=True, catat_gagal=True):
+          nilai_ai=True, catat_gagal=True, model=None, nomor_kombinasi=""):
     """
     Kirim pertanyaan (pesan terakhir di `riwayat`) ke API, lalu catat satu baris ke CSV.
     Mengembalikan dict baris. Jika gagal, baris["status"] diawali "ERROR".
+
+    model           : kosong = model dari .env / bawaan
+    nomor_kombinasi : nomor dari tabel kombinasi struktur dan teknik prompting (opsional)
     """
     didukung = providers.PROVIDERS[api]["params"]
     params = {k: v for k, v in params.items() if k in didukung}
     pertanyaan = riwayat[-1]["content"]
+    model = model or providers.get_model(api)
 
     baris = {
         "waktu": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "sumber": sumber,
         "peneliti": peneliti,
+        "nomor_kombinasi": nomor_kombinasi,
         "api": api,
-        "model": providers.get_model(api),
+        "model": model,
         "parameter_diuji": parameter_diuji,
         # parameter yang tidak didukung API dikosongkan
         "temperature": params.get("temperature", ""),
@@ -121,7 +147,7 @@ def tanya(api, riwayat, params, parameter_diuji="", sumber="chat", peneliti="",
     }
 
     try:
-        hasil = providers.chat_detail(api, riwayat, params)
+        hasil = providers.chat_detail(api, riwayat, params, model=model)
     except ProviderError as e:
         baris["status"] = f"ERROR: {e}"
         if catat_gagal:
@@ -135,13 +161,14 @@ def tanya(api, riwayat, params, parameter_diuji="", sumber="chat", peneliti="",
     baris["jumlah_kata"] = hitung_kata(teks)
     baris["jumlah_kalimat"] = hitung_kalimat(teks)
     if nilai_ai:
-        baris["deskripsi_kualitas"] = providers.nilai_kualitas(api, pertanyaan, teks)
+        baris["deskripsi_kualitas"] = providers.nilai_kualitas(api, pertanyaan, teks, model=model)
     simpan_baris(baris)
     return baris
 
 
 def jalankan_eksperimen(api, param_diuji, daftar_nilai, params_tetap, daftar_pertanyaan,
-                        peneliti="", nilai_ai=True, on_progress=None):
+                        peneliti="", nilai_ai=True, on_progress=None, model=None,
+                        nomor_kombinasi=""):
     """
     Jalankan eksperimen: untuk setiap pertanyaan, ubah `param_diuji` ke setiap nilai
     di `daftar_nilai`; parameter lain mengikuti `params_tetap`.
@@ -164,6 +191,7 @@ def jalankan_eksperimen(api, param_diuji, daftar_nilai, params_tetap, daftar_per
                 api, [{"role": "user", "content": pertanyaan}], params,
                 parameter_diuji=param_diuji, sumber="eksperimen",
                 peneliti=peneliti, nilai_ai=nilai_ai,
+                model=model, nomor_kombinasi=nomor_kombinasi,
             )
             hasil.append(baris)
             selesai += 1

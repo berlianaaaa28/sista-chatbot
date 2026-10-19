@@ -45,7 +45,7 @@ Nama model gratis bisa berganti. Jalankan:
 python -m providers
 ```
 
-Daftar model untuk key-mu akan tampil. Jika model bawaan tidak ada, tulis nama model yang ada di `.env`, misalnya `GEMINI_MODEL=nama-model-dari-daftar`.
+Daftar model untuk key-mu akan tampil. Jika model bawaan tidak ada, tulis nama model yang ada di `.env`, misalnya `GEMINI_MODEL=nama-model-dari-daftar`. Setelah aplikasi berjalan, model juga bisa diganti langsung dari sidebar (kotak **Model**) tanpa mengubah `.env`.
 
 ## 4. Menjalankan aplikasi
 
@@ -57,17 +57,20 @@ Browser terbuka otomatis di `http://localhost:8501`. Untuk berhenti, tekan `Ctrl
 
 ## 5. Cara memakai
 
-- **Sidebar**: pilih API, lihat model aktif, atur slider Temperature / Top-P / Top-K, tombol bersihkan percakapan.
+- **Sidebar**: pilih API, **pilih model** (daftar diambil otomatis dari API, atau ketik nama model sendiri; tanpa mengubah `.env` dan tanpa menjalankan ulang), atur slider Temperature / Top-P / Top-K, tombol bersihkan percakapan.
 - **Tab Chat**: tulis pertanyaan di kolom bawah. **Setiap pertanyaan otomatis tercatat** sebagai satu baris di `results/hasil_pengujian.csv`, dengan parameter dari slider saat itu.
-- **Sidebar > Pencatatan ke CSV**: pilih label "Parameter yang sedang diuji" (hanya untuk kolom `parameter_diuji`), isi nama peneliti, dan nyalakan/matikan penilaian kualitas oleh AI.
+- **Sidebar > Pencatatan ke CSV**: pilih label "Parameter yang sedang diuji" (hanya untuk kolom `parameter_diuji`), isi nama peneliti, isi **nomor kombinasi prompt** (nomor dari tabel Kombinasi Struktur dan Teknik Prompting dari dosen, misalnya `1`, `3.2`, `14`), dan nyalakan/matikan penilaian kualitas oleh AI.
 - **Tab Eksperimen**: uji cepat. Pilih parameter yang diuji, isi nilai (pisahkan koma), isi pertanyaan (satu per baris, boleh banyak), klik *Jalankan eksperimen*. Semua kombinasi tercatat di CSV yang sama.
 - CSV bisa diunduh dari tab Eksperimen atau dibuka langsung di Excel.
+- Jika CSV lama dibuat sebelum kolom `nomor_kombinasi` ada, aplikasi memperbarui header-nya otomatis dan semua data lama tetap aman.
+- Kolom yang diminta template dosen (Prompt, Nomor Kombinasi, Token Input, Token Output, Deskripsi Kualitas) sesuai dengan kolom `pertanyaan`, `nomor_kombinasi`, `token_input`, `token_output`, `deskripsi_kualitas`.
 
 ### Kolom CSV (`results/hasil_pengujian.csv`)
 | Kolom | Isi |
 |---|---|
 | waktu, sumber | kapan dan dari mana (chat / eksperimen) |
-| peneliti, api, model | siapa, API apa, model apa |
+| peneliti, api, model | siapa, API apa, model apa (model yang dipilih di sidebar saat itu) |
+| nomor_kombinasi | nomor kombinasi struktur dan teknik prompting (dari tabel dosen), kosong jika tidak diisi |
 | parameter_diuji | label dari sidebar / tab Eksperimen |
 | temperature, top_p, top_k | nilai yang dipakai (top_k kosong jika API tidak mendukung) |
 | pertanyaan, jawaban | isi tanya-jawab |
