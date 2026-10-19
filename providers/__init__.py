@@ -52,7 +52,7 @@ def available_providers():
     return [nama for nama in PROVIDERS if get_api_key(nama)]
 
 
-def chat_detail(nama, riwayat, params, system_prompt=None):
+def chat_detail(nama, riwayat, params, system_prompt=None, model=None):
     """
     Kirim percakapan ke API yang dipilih.
     Mengembalikan dict: {"teks": ..., "token_input": ..., "token_output": ...}
@@ -62,6 +62,7 @@ def chat_detail(nama, riwayat, params, system_prompt=None):
     params        : dict seperti {"temperature": 0.5, "top_p": 0.9, "top_k": 40}
                     (parameter yang tidak didukung API otomatis dibuang)
     system_prompt : kosong = pakai SYSTEM_PROMPT SISTA
+    model         : kosong = pakai model dari .env / model bawaan (get_model)
     """
     key = get_api_key(nama)
     if not key:
@@ -72,13 +73,13 @@ def chat_detail(nama, riwayat, params, system_prompt=None):
     didukung = PROVIDERS[nama]["params"]
     params = {k: v for k, v in params.items() if k in didukung}
     return _MODUL[nama].chat(
-        key, get_model(nama), riwayat, params, system_prompt or SYSTEM_PROMPT
+        key, model or get_model(nama), riwayat, params, system_prompt or SYSTEM_PROMPT
     )
 
 
-def chat(nama, riwayat, params):
+def chat(nama, riwayat, params, model=None):
     """Sama seperti chat_detail, tetapi hanya mengembalikan teks jawaban."""
-    return chat_detail(nama, riwayat, params)["teks"]
+    return chat_detail(nama, riwayat, params, model=model)["teks"]
 
 
 def list_models(nama):
@@ -98,7 +99,7 @@ PROMPT_PENILAI = """Kamu adalah penilai kualitas jawaban chatbot. Nilai jawaban 
 Tulis HANYA satu deskripsi dalam bahasa Indonesia, maksimal 40 kata, diawali salah satu label: "Baik -", "Cukup -", atau "Kurang -", lalu alasan singkat. Tanpa format lain."""
 
 
-def nilai_kualitas(nama, pertanyaan, jawaban):
+def nilai_kualitas(nama, pertanyaan, jawaban, model=None):
     """Kembalikan deskripsi kualitas jawaban (teks pendek). Tidak pernah melempar error."""
     try:
         isi = f"Pertanyaan:\n{pertanyaan}\n\nJawaban chatbot:\n{jawaban}"
@@ -107,6 +108,7 @@ def nilai_kualitas(nama, pertanyaan, jawaban):
             [{"role": "user", "content": isi}],
             {"temperature": 0.2},
             system_prompt=PROMPT_PENILAI,
+            model=model,
         )
         teks = " ".join(hasil["teks"].split())
         return teks[:300]
