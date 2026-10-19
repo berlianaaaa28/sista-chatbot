@@ -2,7 +2,8 @@
 ui_eksperimen.py
 ----------------
 Tampilan tab "Eksperimen" di aplikasi SISTA.
-Dipanggil dari app.py:  ui_eksperimen.render(api, info, params, peneliti, nilai_ai)
+Dipanggil dari app.py:
+    ui_eksperimen.render(api, info, params, peneliti, nilai_ai, model=..., nomor_kombinasi=...)
 """
 
 import streamlit as st
@@ -18,12 +19,14 @@ SARAN_NILAI = {
 }
 
 
-def render(api, info, params, peneliti, nilai_ai):
+def render(api, info, params, peneliti, nilai_ai, model=None, nomor_kombinasi=""):
+    model = model or providers.get_model(api)
     st.subheader("Eksperimen parameter")
     st.write(
         "Uji cepat: satu parameter diuji dengan beberapa nilai, parameter lain tetap "
         "(diambil dari sidebar). Pertanyaan dan system prompt sama untuk setiap nilai. "
-        f"API dan model yang dipakai: **{api}** / `{providers.get_model(api)}`."
+        f"API dan model yang dipakai: **{api}** / `{model}` "
+        "(model bisa diganti di sidebar)."
     )
 
     c1, c2 = st.columns(2)
@@ -87,6 +90,7 @@ def render(api, info, params, peneliti, nilai_ai):
             hasil = experiment.jalankan_eksperimen(
                 api, diuji, nilai, tetap, daftar_pertanyaan,
                 peneliti=peneliti, nilai_ai=nilai_ai, on_progress=laporan,
+                model=model, nomor_kombinasi=nomor_kombinasi,
             )
             st.success("Selesai. Hasil sudah tersimpan di results/hasil_pengujian.csv")
             for h in hasil:

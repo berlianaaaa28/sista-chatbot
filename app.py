@@ -10,9 +10,20 @@ import streamlit as st
 import experiment
 import providers
 import ui_eksperimen
-from providers import NAMA_PARAM
+from providers import NAMA_PARAM, ProviderError
 
 st.set_page_config(page_title="SISTA", page_icon="🎓", layout="wide")
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def daftar_model(nama_api):
+    """Daftar model dari API (disimpan 10 menit). Kosong jika gagal diambil."""
+    try:
+        return providers.list_models(nama_api)
+    except ProviderError:
+        return []
+
+
 
 st.title("🎓 SISTA")
 st.caption(
@@ -36,7 +47,21 @@ with st.sidebar:
 
     api = st.selectbox("Pilih API", siap)
     info = providers.PROVIDERS[api]
-    st.info(f"Model aktif: `{providers.get_model(api)}`")
+
+    # Model bisa diganti di sini tanpa mengubah .env dan tanpa menjalankan ulang aplikasi
+    model_awal = providers.get_model(api)
+    pilihan_model = [model_awal] + [m for m in daftar_model(api) if m != model_awal]
+    model_pilih = st.selectbox(
+        "Model", pilihan_model, key=f"model_{api}",
+        help="Daftar diambil dari API. Model teratas = model dari .env / bawaan. "
+             "Beberapa model di daftar mungkin bukan model chat.",
+    )
+    model_ketik = st.text_input(
+        "Atau ketik nama model sendiri (opsional)", key=f"model_ketik_{api}",
+        help="Jika diisi, nama ini dipakai menggantikan pilihan di atas.",
+    )
+    model = model_ketik.strip() or model_pilih
+    st.info(f"Model aktif: `{model}`")
 
     st.subheader("Parameter")
     params = {}
@@ -66,6 +91,11 @@ with st.sidebar:
              "antar pertanyaan, dan biarkan parameter lain tetap.",
     )
     peneliti = st.text_input("Nama peneliti (opsional)", key="peneliti")
+    nomor_kombinasi = st.text_input(
+        "Nomor kombinasi prompt (opsional)", key="nomor_kombinasi",
+        help="Nomor dari tabel Kombinasi Struktur dan Teknik Prompting dari dosen, "
+             "contoh: 1, 3.2, 14. Ganti setiap kali kamu mengganti gaya prompt.",
+    )
     nilai_ai = st.checkbox(
         "Nilai kualitas jawaban dengan AI",
         value=True,
@@ -88,7 +118,7 @@ with tab_chat:
         st.session_state.pesan = []
 
     st.caption(
-        f"API: **{api}** · Model: **{providers.get_model(api)}** · "
+        f"API: **{api}** · Model: **{model}** · "
         + " · ".join(f"{k}={v}" for k, v in params.items())
     )
 
@@ -110,7 +140,8 @@ with tab_chat:
                     api, st.session_state.pesan, params,
                     parameter_diuji=diuji_chat, sumber="chat",
                     peneliti=peneliti.strip(), nilai_ai=nilai_ai,
-                    catat_gagal=False,
+                    catat_gagal=False, model=model,
+                    nomor_kombinasi=nomor_kombinasi.strip(),
                 )
             if baris["status"] == "OK":
                 st.markdown(baris["jawaban"])
@@ -126,4 +157,7 @@ with tab_chat:
 
 # -------------------------- TAB EKSPERIMEN ---------------------------------
 with tab_eksp:
-    ui_eksperimen.render(api, info, params, peneliti.strip(), nilai_ai)
+    ui_eksperimen.render(
+        api, info, params, peneliti.strip(), nilai_ai,
+        model=model, nomor_kombinasi=nomor_kombinasi.strip(),
+    )
