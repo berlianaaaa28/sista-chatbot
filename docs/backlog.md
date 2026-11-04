@@ -23,5 +23,8 @@ Isi nama anggota di bagian bawah. Kolom Status diperbarui kelompok saat mengerja
 | B-09 | Perbandingan antar-API dengan parameter sama | Rendah | Semua | Belum | 1 pertanyaan, parameter identik, dicatat sebagai pembanding (bukan bukti pengaruh parameter) |
 | B-10 | Dokumentasi (README) | Sedang | A3 | Selesai | Orang lain bisa menjalankan aplikasi hanya dari README |
 | B-11 | Presentasi | Tinggi | Semua | Belum | Slide mengikuti kerangka di `docs/kerangka_presentasi.md`; demo berjalan |
+| B-12a | RAG: modul pencarian (`rag.py`) dan dokumen contoh (`knowledge/`) | Tinggi | A1 | Selesai | Dokumen dipecah, dicari dengan TF-IDF, potongan relevan ditemukan |
+| B-12b | RAG: integrasi ke pencatatan (`experiment.py`) | Tinggi | A2 | Selesai | Kolom `rag` dan `sumber_rag` tercatat, prompt memuat konteks |
+| B-12c | RAG: tampilan sidebar, unggah dokumen, tampilan sumber (`app.py`) | Tinggi | A3 | Selesai | Centang RAG, unggah file, kotak Sumber RAG muncul di bawah jawaban |
 
 Nama anggota: A1 = ______ , A2 = ______ , A3 = ______
