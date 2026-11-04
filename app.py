@@ -9,6 +9,7 @@ import streamlit as st
 
 import experiment
 import providers
+import rag
 import ui_eksperimen
 from providers import NAMA_PARAM, ProviderError
 
@@ -22,6 +23,34 @@ def daftar_model(nama_api):
         return providers.list_models(nama_api)
     except ProviderError:
         return []
+
+
+@st.cache_resource(show_spinner=False)
+def bangun_indeks(unggahan, tanda_folder):
+    """
+    Buat indeks RAG dari dokumen di folder knowledge/ ditambah dokumen unggahan.
+    `tanda_folder` hanya dipakai supaya indeks dibuat ulang saat isi folder berubah.
+    """
+    dokumen = rag.muat_folder()
+    galat = []
+    for nama, isi in unggahan:
+        try:
+            dokumen.append((nama, rag.baca_file(nama, isi)))
+        except rag.RAGError as e:
+            galat.append(str(e))
+    return rag.buat_indeks(dokumen), len(dokumen), galat
+
+
+def tampil_sumber(sumber):
+    """Tampilkan potongan dokumen yang dipakai RAG (None = RAG tidak dipakai)."""
+    if sumber is None:
+        return
+    with st.expander(f"Sumber RAG ({len(sumber)} potongan)"):
+        if not sumber:
+            st.caption("Tidak ada potongan dokumen yang relevan dengan pertanyaan ini.")
+        for i, h in enumerate(sumber, 1):
+            st.markdown(f"**[{i}] {h['sumber']} · bagian {h['no']} · skor {h['skor']}**")
+            st.text(h["teks"])
 
 
 
@@ -80,6 +109,26 @@ with st.sidebar:
     if info["note"]:
         st.caption("ℹ️ " + info["note"])
 
+    st.subheader("Basis pengetahuan (RAG)")
+    pakai_rag = st.checkbox(
+        "Gunakan RAG",
+        value=False,
+        help="SISTA mencari potongan dokumen yang relevan (folder knowledge/ dan file "
+             "unggahan), lalu menjawab berdasarkan potongan itu. Berlaku di tab Chat.",
+    )
+    indeks, k_rag = None, 3
+    if pakai_rag:
+        file_unggah = st.file_uploader(
+            "Tambah dokumen (.txt, .md, .pdf)", type=["txt", "md", "pdf"],
+            accept_multiple_files=True,
+        )
+        unggahan = tuple((f.name, f.getvalue()) for f in file_unggah)
+        k_rag = st.slider("Jumlah potongan konteks (k)", 1, 5, 3)
+        indeks, jumlah_dokumen, galat = bangun_indeks(unggahan, rag.tanda_folder())
+        for g in galat:
+            st.warning(g)
+        st.caption(f"{jumlah_dokumen} dokumen · {len(indeks.potongan)} potongan siap dicari.")
+
     st.subheader("Pencatatan ke CSV")
     st.caption("Setiap pertanyaan di Chat otomatis dicatat ke results/hasil_pengujian.csv.")
     diuji_chat = st.selectbox(
@@ -127,12 +176,16 @@ with tab_chat:
             st.markdown(p["content"])
             if p.get("info"):
                 st.caption(p["info"])
+            tampil_sumber(p.get("sumber"))
 
     pertanyaan = st.chat_input("Tulis pertanyaanmu di sini...")
     if pertanyaan:
         st.session_state.pesan.append({"role": "user", "content": pertanyaan})
         with st.chat_message("user"):
             st.markdown(pertanyaan)
+
+        # RAG: cari potongan dokumen yang relevan (None = RAG mati)
+        rag_hasil = indeks.cari(pertanyaan, k=k_rag) if pakai_rag else None
 
         with st.chat_message("assistant"):
             with st.spinner("SISTA sedang berpikir..."):
@@ -142,13 +195,16 @@ with tab_chat:
                     peneliti=peneliti.strip(), nilai_ai=nilai_ai,
                     catat_gagal=False, model=model,
                     nomor_kombinasi=nomor_kombinasi.strip(),
+                    rag_hasil=rag_hasil,
                 )
             if baris["status"] == "OK":
                 st.markdown(baris["jawaban"])
                 info_teks = experiment.ringkas_baris(baris)
                 st.caption(info_teks)
+                tampil_sumber(rag_hasil)
                 st.session_state.pesan.append(
-                    {"role": "assistant", "content": baris["jawaban"], "info": info_teks}
+                    {"role": "assistant", "content": baris["jawaban"], "info": info_teks,
+                     "sumber": rag_hasil}
                 )
             else:
                 st.error(baris["status"].replace("ERROR: ", "", 1))
