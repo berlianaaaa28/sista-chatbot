@@ -22,6 +22,7 @@ from pathlib import Path
 import pandas as pd
 
 import providers
+import rag
 from providers import ProviderError
 
 FOLDER_HASIL = Path(__file__).parent / "results"
@@ -32,6 +33,8 @@ KOLOM = [
     "sumber",            # chat atau eksperimen
     "peneliti",
     "nomor_kombinasi",   # nomor dari tabel kombinasi struktur dan teknik prompting (dosen)
+    "rag",               # ya jika jawaban memakai konteks dari dokumen (RAG), selain itu tidak
+    "sumber_rag",        # potongan dokumen yang dipakai, contoh: tentang_sista.md#2
     "api",
     "model",
     "parameter_diuji",   # kosong jika tidak ada parameter khusus yang diuji
@@ -111,13 +114,15 @@ def baca_csv():
 
 
 def tanya(api, riwayat, params, parameter_diuji="", sumber="chat", peneliti="",
-          nilai_ai=True, catat_gagal=True, model=None, nomor_kombinasi=""):
+          nilai_ai=True, catat_gagal=True, model=None, nomor_kombinasi="", rag_hasil=None):
     """
     Kirim pertanyaan (pesan terakhir di `riwayat`) ke API, lalu catat satu baris ke CSV.
     Mengembalikan dict baris. Jika gagal, baris["status"] diawali "ERROR".
 
     model           : kosong = model dari .env / bawaan
     nomor_kombinasi : nomor dari tabel kombinasi struktur dan teknik prompting (opsional)
+    rag_hasil       : None = RAG mati. List potongan dari rag.Indeks.cari() = RAG aktif
+                      (boleh list kosong jika tidak ada potongan yang relevan).
     """
     didukung = providers.PROVIDERS[api]["params"]
     params = {k: v for k, v in params.items() if k in didukung}
@@ -129,6 +134,8 @@ def tanya(api, riwayat, params, parameter_diuji="", sumber="chat", peneliti="",
         "sumber": sumber,
         "peneliti": peneliti,
         "nomor_kombinasi": nomor_kombinasi,
+        "rag": "ya" if rag_hasil is not None else "tidak",
+        "sumber_rag": rag.label_sumber(rag_hasil) if rag_hasil else "",
         "api": api,
         "model": model,
         "parameter_diuji": parameter_diuji,
@@ -146,8 +153,14 @@ def tanya(api, riwayat, params, parameter_diuji="", sumber="chat", peneliti="",
         "status": "OK",
     }
 
+    # Dengan RAG, pesan terakhir diganti prompt yang berisi konteks dokumen.
+    # Di CSV tetap tercatat pertanyaan aslinya.
+    pesan = riwayat
+    if rag_hasil is not None:
+        pesan = riwayat[:-1] + [{"role": "user", "content": rag.susun_prompt(pertanyaan, rag_hasil)}]
+
     try:
-        hasil = providers.chat_detail(api, riwayat, params, model=model)
+        hasil = providers.chat_detail(api, pesan, params, model=model)
     except ProviderError as e:
         baris["status"] = f"ERROR: {e}"
         if catat_gagal:
