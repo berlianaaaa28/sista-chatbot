@@ -6,6 +6,7 @@ Chatbot asisten AI serbaguna (profil umum, persona ramah dan sistematis). Dibuat
 - Teknik prompting: **Zero-Shot Prompting** (instruksi tanpa contoh tanya-jawab)
 - Parameter: **Temperature, Top-P, Top-K** (hanya yang didukung API terpilih yang ditampilkan)
 - API: **Gemini**, **Groq**, **Cohere** (satu API per anggota; semuanya punya akses gratis)
+- **RAG** (Retrieval-Augmented Generation): SISTA bisa menjawab berdasarkan dokumen (`.txt`, `.md`, `.pdf`) yang dicari otomatis, lengkap dengan sumbernya
 
 ---
 
@@ -60,6 +61,7 @@ Browser terbuka otomatis di `http://localhost:8501`. Untuk berhenti, tekan `Ctrl
 - **Sidebar**: pilih API, **pilih model** (daftar diambil otomatis dari API, atau ketik nama model sendiri; tanpa mengubah `.env` dan tanpa menjalankan ulang), atur slider Temperature / Top-P / Top-K, tombol bersihkan percakapan.
 - **Tab Chat**: tulis pertanyaan di kolom bawah. **Setiap pertanyaan otomatis tercatat** sebagai satu baris di `results/hasil_pengujian.csv`, dengan parameter dari slider saat itu.
 - **Sidebar > Pencatatan ke CSV**: pilih label "Parameter yang sedang diuji" (hanya untuk kolom `parameter_diuji`), isi nama peneliti, isi **nomor kombinasi prompt** (nomor dari tabel Kombinasi Struktur dan Teknik Prompting dari dosen, misalnya `1`, `3.2`, `14`), dan nyalakan/matikan penilaian kualitas oleh AI.
+- **Sidebar > Basis pengetahuan (RAG)**: centang **Gunakan RAG**, lalu (opsional) unggah dokumen sendiri dan atur jumlah potongan konteks (k). Lihat bagian 11.
 - **Tab Eksperimen**: uji cepat. Pilih parameter yang diuji, isi nilai (pisahkan koma), isi pertanyaan (satu per baris, boleh banyak), klik *Jalankan eksperimen*. Semua kombinasi tercatat di CSV yang sama.
 - CSV bisa diunduh dari tab Eksperimen atau dibuka langsung di Excel.
 - Jika CSV lama dibuat sebelum kolom `nomor_kombinasi` ada, aplikasi memperbarui header-nya otomatis dan semua data lama tetap aman.
@@ -71,6 +73,7 @@ Browser terbuka otomatis di `http://localhost:8501`. Untuk berhenti, tekan `Ctrl
 | waktu, sumber | kapan dan dari mana (chat / eksperimen) |
 | peneliti, api, model | siapa, API apa, model apa (model yang dipilih di sidebar saat itu) |
 | nomor_kombinasi | nomor kombinasi struktur dan teknik prompting (dari tabel dosen), kosong jika tidak diisi |
+| rag, sumber_rag | `ya` jika jawaban memakai konteks dokumen (RAG), lalu potongan yang dipakai, contoh `tentang_sista.md#2`; selain itu `tidak` dan kosong |
 | parameter_diuji | label dari sidebar / tab Eksperimen |
 | temperature, top_p, top_k | nilai yang dipakai (top_k kosong jika API tidak mendukung) |
 | pertanyaan, jawaban | isi tanya-jawab |
@@ -102,6 +105,8 @@ sista-chatbot/
 │   └── cohere.py     integrasi Cohere
 ├── ui_eksperimen.py  tampilan tab Eksperimen
 ├── experiment.py     mencatat hasil ke CSV dan menjalankan eksperimen
+├── rag.py            RAG: memecah dokumen, mencari potongan relevan, menyusun prompt
+├── knowledge/        dokumen sumber RAG (contoh: tentang_sista.md, panduan_prompting.md)
 ├── requirements.txt  daftar library
 ├── .env.example      contoh file API key
 ├── .gitignore
@@ -135,10 +140,38 @@ Jika Cohere menolak `k`, hapus baris `"top_k": {...}` di `CONFIG` pada `provider
 | `ModuleNotFoundError` | Jalankan `pip install -r requirements.txt` lagi. |
 | `.env` tidak terbaca | Pastikan namanya `.env` (bukan `.env.txt`) dan ada di folder yang sama dengan `app.py`. |
 
-## 10. Batasan yang perlu disebut di laporan
+## 10. Batasan yang perlu disebut di laporan (lihat juga batasan RAG di bagian 11)
 
 - Perbandingan antar-API tidak bisa disimpulkan dari parameter saja, karena modelnya berbeda. Eksperimen parameter dilakukan **di dalam satu API** dengan model tetap.
 - Deskripsi kualitas dibuat oleh AI yang sama dengan yang menjawab, sehingga bisa bias. Jelaskan ini di laporan.
 - Hasil AI bersifat acak (terutama pada Temperature tinggi); ulangi eksperimen jika ingin melihat konsistensi.
 - Free tier Gemini dapat memakai data input untuk memperbaiki produk Google; jangan masukkan data pribadi.
 - Trial key Cohere tidak boleh dipakai untuk keperluan komersial.
+
+## 11. RAG (Retrieval-Augmented Generation)
+
+RAG membuat SISTA **mencari dulu di dokumen**, baru menjawab berdasarkan hasil pencarian itu. Hasilnya lebih akurat untuk isi dokumen dan bisa menyebut sumbernya.
+
+**Cara kerja** (semua ada di `rag.py`, tanpa library tambahan kecuali `pypdf` untuk membaca PDF):
+
+1. Dokumen dibaca lalu **dipecah** menjadi potongan sekitar 600 karakter (mengikuti batas paragraf).
+2. Setiap potongan diberi bobot kata dengan **TF-IDF** dan disimpan sebagai indeks.
+3. Saat ada pertanyaan, dicari `k` potongan yang paling mirip (**cosine similarity**). Potongan dengan skor terlalu rendah dibuang.
+4. Potongan terpilih ditempel ke prompt sebagai **KONTEKS**, dan AI diminta menjawab hanya dari konteks itu. Jika tidak ada di konteks, AI diminta mengatakan tidak ditemukan.
+5. Di bawah jawaban muncul kotak **Sumber RAG** berisi potongan yang dipakai beserta skornya.
+
+**Cara memakai**
+
+1. Letakkan dokumen di folder `knowledge/` (`.txt`, `.md`, atau `.pdf`), atau unggah lewat sidebar. Dua dokumen contoh sudah tersedia: `tentang_sista.md` dan `panduan_prompting.md`.
+2. Centang **Gunakan RAG** di sidebar, lalu bertanya di tab Chat. Contoh: "Apa itu Top-P dan Top-K?" atau "Apa bedanya zero-shot dan few-shot?"
+3. Hasil tercatat di CSV dengan `rag = ya` dan `sumber_rag` berisi potongan yang dipakai.
+
+**Batasan RAG di SISTA**
+
+- Pencarian berbasis **kata kunci** (TF-IDF), bukan makna. Pertanyaan dengan kata yang berbeda dari dokumen (sinonim) bisa gagal menemukan potongan yang relevan.
+- PDF hasil scan (berupa gambar) tidak bisa dibaca karena tidak ada teks di dalamnya.
+- Dokumen unggahan hanya disimpan selama sesi aplikasi berjalan. Untuk dokumen tetap, taruh di folder `knowledge/`.
+- RAG berlaku di tab Chat. Tab Eksperimen tidak memakai RAG.
+- Penilai kualitas AI tidak melihat konteks dokumen, jadi penilaiannya terhadap jawaban berbasis RAG hanya perkiraan.
+- Token input bertambah karena konteks ikut dikirim. Kolom `token_input` sudah memperhitungkannya.
+- Jangan mengunggah dokumen pribadi ke API gratis (lihat catatan Gemini di bagian 10).
